@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>物资视频计数 Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #17202a;
+        --muted: #637083;
+        --line: #dfe4ea;
+        --accent: #1769aa;
+        --accent-strong: #0d4f86;
+        --ok: #13795b;
+        --warn: #a05a00;
+        --shadow: 0 10px 30px rgba(21, 32, 43, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: min(1180px, calc(100vw - 32px));
+        height: 64px;
+        margin: 0 auto;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #e7f0f8;
+        color: var(--accent-strong);
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        white-space: nowrap;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 56px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .panel-body {
+        padding: 18px;
+      }
+
+      .upload-box {
+        display: grid;
+        place-items: center;
+        min-height: 210px;
+        padding: 22px;
+        border: 1px dashed #aab6c4;
+        border-radius: 8px;
+        background: #fbfcfd;
+        text-align: center;
+        transition:
+          border-color 160ms ease,
+          background 160ms ease;
+      }
+
+      .upload-box.dragging {
+        border-color: var(--accent);
+        background: #eef6fc;
+      }
+
+      .upload-icon {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 14px;
+        border-radius: 8px;
+        background: #e7f0f8;
+        color: var(--accent-strong);
+        font-size: 24px;
+      }
+
+      .upload-title {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .upload-hint,
+      .small-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      input[type="file"] {
+        display: none;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      button.primary:hover {
+        background: var(--accent-strong);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+      }
+
+      .selected-file {
+        min-height: 22px;
+        margin-top: 14px;
+        color: var(--text);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+
+      .message {
+        display: none;
+        margin-top: 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #f9fafb;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .message.show {
+        display: block;
+      }
+
+      .message.error {
+        border-color: #f0b8b8;
+        background: #fff6f6;
+        color: #a22a2a;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        min-height: 96px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .metric-label {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .metric-value {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+
+      .metric-value.small {
+        font-size: 20px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        padding: 12px 18px 0;
+      }
+
+      .tab {
+        min-height: 34px;
+        padding: 0 12px;
+        border-color: transparent;
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .tab.active {
+        border-color: var(--line);
+        background: #f7f9fb;
+        color: var(--text);
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .chart-wrap {
+        min-height: 260px;
+        overflow-x: auto;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 72px minmax(120px, 1fr) 48px;
+        align-items: center;
+        gap: 10px;
+        height: 30px;
+        font-size: 12px;
+      }
+
+      .bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #edf1f5;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .gallery img,
+      .projection img {
+        display: block;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #eef1f4;
+      }
+
+      .projection {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .json-link {
+        color: var(--accent-strong);
+        font-size: 14px;
+        text-decoration: none;
+      }
+
+      .json-link:hover {
+        text-decoration: underline;
+      }
+
+      .empty {
+        min-height: 420px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #cbd5df;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 800ms linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 900px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .topbar {
+          height: auto;
+          min-height: 64px;
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: 12px 0;
+        }
+
+        .status {
+          white-space: normal;
+        }
+
+        .summary-grid,
+        .gallery {
+          grid-template-columns: 1fr;
+        }
+
+        .actions {
+          flex-direction: column;
+        }
+
+        button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark">C</div>
+          <h1>物资绕拍视频计数 Demo</h1>
+        </div>
+        <div class="status"><span class="dot"></span><span>本地算法服务</span></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="workspace">
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">视频上传</h2>
+          </div>
+          <div class="panel-body">
+            <label class="upload-box" id="dropZone" for="videoInput">
+              <span>
+                <span class="upload-icon">↑</span>
+                <p class="upload-title">选择或拖入绕拍视频</p>
+                <p class="upload-hint">支持 mp4、mov、avi、mkv、webm。当前模型面向竹竿包裹圆柱零件。</p>
+              </span>
+            </label>
+            <input id="videoInput" type="file" accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm" />
+            <div class="selected-file" id="selectedFile">尚未选择文件</div>
+            <div class="actions">
+              <button type="button" id="chooseButton">选择视频</button>
+              <button type="button" class="primary" id="submitButton" disabled>开始计数</button>
+            </div>
+            <p class="small-note">上传后页面会等待处理完成，结果会显示计数、视频信息、关键帧检测图和投影聚类诊断图。</p>
+            <div class="message" id="message"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">计数结果</h2>
+            <a class="json-link" id="jsonLink" href="#" target="_blank" rel="noreferrer" hidden>查看 JSON</a>
+          </div>
+
+          <div id="emptyState" class="empty">
+            <div>
+              <p class="upload-title">等待上传视频</p>
+              <p class="upload-hint">完成处理后，这里会展示演示结果。</p>
+            </div>
+          </div>
+
+          <div id="resultView" hidden>
+            <div class="panel-body">
+              <div class="summary-grid" id="summaryGrid"></div>
+            </div>
+
+            <div class="tabs" role="tablist">
+              <button type="button" class="tab active" data-tab="frames">每帧数量</button>
+              <button type="button" class="tab" data-tab="gallery">标注关键帧</button>
+              <button type="button" class="tab" data-tab="projection">聚类诊断</button>
+            </div>
+
+            <div class="panel-body tab-panel active" id="tab-frames">
+              <div class="chart-wrap" id="frameChart"></div>
+            </div>
+
+            <div class="panel-body tab-panel" id="tab-gallery">
+              <div class="gallery" id="gallery"></div>
+            </div>
+
+            <div class="panel-body tab-panel" id="tab-projection">
+              <div class="projection" id="projection"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const input = document.getElementById("videoInput");
+      const chooseButton = document.getElementById("chooseButton");
+      const submitButton = document.getElementById("submitButton");
+      const selectedFile = document.getElementById("selectedFile");
+      const message = document.getElementById("message");
+      const dropZone = document.getElementById("dropZone");
+      const emptyState = document.getElementById("emptyState");
+      const resultView = document.getElementById("resultView");
+      const summaryGrid = document.getElementById("summaryGrid");
+      const frameChart = document.getElementById("frameChart");
+      const gallery = document.getElementById("gallery");
+      const projection = document.getElementById("projection");
+      const jsonLink = document.getElementById("jsonLink");
+
+      let currentFile = null;
+
+      chooseButton.addEventListener("click", () => input.click());
+      input.addEventListener("change", () => setFile(input.files[0]));
+
+      for (const eventName of ["dragenter", "dragover"]) {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.add("dragging");
+        });
+      }
+
+      for (const eventName of ["dragleave", "drop"]) {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.remove("dragging");
+        });
+      }
+
+      dropZone.addEventListener("drop", (event) => {
+        setFile(event.dataTransfer.files[0]);
+      });
+
+      submitButton.addEventListener("click", async () => {
+        if (!currentFile) return;
+
+        setBusy(true);
+        showMessage("正在上传并计数，请等待处理完成。", false);
+
+        const formData = new FormData();
+        formData.append("video", currentFile);
+
+        try {
+          const response = await fetch("/api/count", {
+            method: "POST",
+            body: formData,
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || "计数失败");
+          }
+          renderResult(payload);
+          showMessage("处理完成。", false);
+        } catch (error) {
+          showMessage(error.message || "计数失败", true);
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+          document.querySelectorAll(".tab-panel").forEach((item) => item.classList.remove("active"));
+          tab.classList.add("active");
+          document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+        });
+      });
+
+      function setFile(file) {
+        currentFile = file || null;
+        submitButton.disabled = !currentFile;
+        selectedFile.textContent = currentFile
+          ? `${currentFile.name} · ${formatBytes(currentFile.size)}`
+          : "尚未选择文件";
+        hideMessage();
+      }
+
+      function setBusy(isBusy) {
+        submitButton.disabled = isBusy || !currentFile;
+        chooseButton.disabled = isBusy;
+        submitButton.innerHTML = isBusy ? '<span class="spinner"></span><span>处理中</span>' : "开始计数";
+      }
+
+      function showMessage(text, isError) {
+        message.textContent = text;
+        message.className = `message show${isError ? " error" : ""}`;
+      }
+
+      function hideMessage() {
+        message.className = "message";
+        message.textContent = "";
+      }
+
+      function renderResult(data) {
+        emptyState.hidden = true;
+        resultView.hidden = false;
+        jsonLink.hidden = !data.result_json;
+        if (data.result_json) {
+          jsonLink.href = data.result_json;
+        }
+
+        const info = data.video_info || {};
+        summaryGrid.innerHTML = [
+          metric("估算数量", data.estimated_count ?? "-"),
+          metric("抽帧数量", data.sampled_frame_count ?? "-"),
+          metric("原始检测", data.total_raw_detections ?? "-"),
+          metric("视频时长", info.duration_sec ? `${info.duration_sec.toFixed(1)} 秒` : "-", true),
+          metric("分辨率", info.width && info.height ? `${info.width} × ${info.height}` : "-", true),
+          metric("FPS", info.fps ? info.fps.toFixed(1) : "-", true),
+          metric("位姿成功", `${data.pose_ok_count ?? "-"} / ${data.sampled_frame_count ?? "-"}`, true),
+          metric("聚类诊断", data.global_projection_cluster_count_diagnostic ?? "-", true),
+        ].join("");
+
+        renderFrameChart(data.per_frame || []);
+        renderGallery(data.annotated_images || []);
+        renderProjection(data.projection_plot);
+      }
+
+      function metric(label, value, small = false) {
+        return `
+          <div class="metric">
+            <p class="metric-label">${escapeHtml(label)}</p>
+            <p class="metric-value${small ? " small" : ""}">${escapeHtml(String(value))}</p>
+          </div>
+        `;
+      }
+
+      function renderFrameChart(frames) {
+        if (!frames.length) {
+          frameChart.innerHTML = '<p class="upload-hint">没有每帧结果。</p>';
+          return;
+        }
+        const maxCount = Math.max(...frames.map((item) => item.detection_count || 0), 1);
+        frameChart.innerHTML = frames
+          .map((item) => {
+            const width = Math.max(2, ((item.detection_count || 0) / maxCount) * 100);
+            return `
+              <div class="bar-row">
+                <span>帧 ${item.frame_number}</span>
+                <span class="bar-track"><span class="bar-fill" style="width: ${width}%"></span></span>
+                <span>${item.detection_count || 0}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function renderGallery(images) {
+        gallery.innerHTML = images.length
+          ? images.map((src) => `<img src="${src}" alt="标注关键帧" loading="lazy" />`).join("")
+          : '<p class="upload-hint">没有生成标注关键帧。</p>';
+      }
+
+      function renderProjection(src) {
+        projection.innerHTML = src
+          ? `<img src="${src}" alt="投影聚类诊断图" loading="lazy" />`
+          : '<p class="upload-hint">没有生成投影聚类诊断图。</p>';
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes) return "0 B";
+        const units = ["B", "KB", "MB", "GB"];
+        const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+      }
+
+      function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, (char) => {
+          const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+          return map[char];
+        });
+      }
+    </script>
+  </body>
+</html>
