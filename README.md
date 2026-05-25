@@ -1,55 +1,79 @@
-# Multi-view Counting Demo
+# Material Counting Prototype
 
-这个 demo 针对 `b7763a0682d156294de373ad97e2c544.mp4`，用于粗略统计“竹竿包裹的圆柱形零件”数量。
+这个项目用于搭建“物资绕拍视频自动计数系统”的深度学习模型路线。
 
-## 运行
+当前阶段先围绕样例视频 `b7763a0682d156294de373ad97e2c544.mp4` 跑通完整工程链路：
 
-```bash
-python3 count_cylinder_parts_demo.py
+```text
+抽取关键帧
+  -> 人工标注 YOLO 数据
+  -> 训练端面检测模型
+  -> 使用模型推理计数
+  -> Web demo 上传视频并展示结果
 ```
 
-默认输出到 `count_demo_output/`：
+## 模型路线
 
-- `count_result.json`：计数结果、每帧检测数、相机运动估计质量、检测明细。
-- `annotated/`：带检测圈的关键帧。
-- `keyframes/`：抽取的关键帧。
-- `projected_clusters.png`：跨帧投影后的聚类可视化。
+本项目不再保留旧规则基线计数流程。计数结果应来自训练好的深度学习检测模型。
 
-## 技术流程
+当前默认检测类别：
 
-1. 每隔 `--frame-stride` 帧抽一个关键帧。
-2. 根据竹竿颜色生成前景物资区域，默认只保留样例视频里的主前景堆。
-3. 在前景区域内检测银灰色圆柱端面。
-4. 使用 ORB 特征和单应矩阵估计相邻关键帧之间的相机运动。
-5. 把不同帧的端面检测点投影到同一参考坐标系。
-6. 使用 DBSCAN 生成全局投影聚类诊断图。
-7. 主计数采用多视角关键帧中的强视角鲁棒融合，避免把绕拍视频里的三维视差错误压平成一个平面后产生过度合并。
-
-## 重要说明
-
-这是一个工程 demo，不是生产级盘点系统。它的目的是把“多视角重建 + 目标去重”的主流程跑通。当前检测器是针对样例视频调过的规则检测器，正式系统应替换为训练好的 YOLO/SAM/实例分割模型；当前相机运动是单应近似，正式系统应替换为 COLMAP、SLAM 或深度/三维重建。
-
-注意：绕拍物体不是平面，单应矩阵只能作为近似诊断。`count_result.json` 里的 `global_projection_cluster_count_diagnostic` 不建议直接作为最终库存数，主结果看 `estimated_count`。
-
-如果要把背景中的同类堆垛也纳入统计，可以运行：
-
-```bash
-python3 count_cylinder_parts_demo.py --include-background-piles
+```text
+part_end_cap
 ```
 
-如果结果过分合并或重复，可以调整：
+也就是圆柱零件端面。
+
+## 数据准备
+
+从样例视频抽取关键帧，并生成 YOLO 数据集目录骨架：
 
 ```bash
-python3 count_cylinder_parts_demo.py --cluster-eps 60
+python3 scripts/extract_frames_for_labeling.py
 ```
 
-如果石子误检较多，可以调严端面平滑度：
+默认输出：
+
+```text
+datasets/end_cap_single_video/
+  data.yaml
+  dataset_summary.json
+  images/train/
+  images/val/
+  labels/train/
+  labels/val/
+```
+
+抽帧后，需要人工标注 `images/train/` 和 `images/val/` 中的图片，并将 YOLO 格式标签保存到对应的 `labels/train/` 和 `labels/val/` 目录。
+
+## 训练模型
 
 ```bash
-python3 count_cylinder_parts_demo.py --max-center-std 38
+python3 scripts/train_single_video_yolo.py --device 0
 ```
 
-## Web demo
+默认训练输出：
+
+```text
+model_runs/end_cap_single_video/weights/best.pt
+```
+
+## 模型计数
+
+```bash
+python3 scripts/count_with_yolo_model.py --device 0
+```
+
+默认输出：
+
+```text
+model_count_output/
+  count_result.json
+  keyframes/
+  annotated/
+```
+
+## Web Demo
 
 启动本地演示服务：
 
@@ -60,22 +84,26 @@ python3 server.py
 然后在浏览器打开：
 
 ```text
-http://127.0.0.1:8000/
+http://127.0.0.1:8004/
 ```
 
-页面支持上传同类绕拍视频，后端会保存到 `demo_runs/` 下的独立运行目录，并复用当前脚本逻辑返回估算数量、视频信息、每帧检测数量、标注关键帧和投影聚类诊断图。
+页面支持上传同类绕拍视频。后端会调用训练好的 YOLO 模型，返回估算数量、视频信息、每帧检测数量、标注关键帧和结果 JSON。
 
-## 单视频模型框架
-
-如果要先用样例视频搭建模型训练和推理链路，请参考：
+默认模型权重路径：
 
 ```text
-MODEL_TRAINING.md
+model_runs/end_cap_single_video/weights/best.pt
 ```
 
-当前模型框架支持：
+如果需要指定其他模型权重，可以设置环境变量：
 
-1. 从 `b7763a0682d156294de373ad97e2c544.mp4` 抽帧。
-2. 使用现有规则检测器生成 YOLO 伪标签。
-3. 训练 YOLO 端面检测模型。
-4. 使用训练好的模型重新对视频计数。
+```bash
+COUNTING_MODEL_WEIGHTS=/path/to/best.pt python3 server.py
+```
+
+## 详细文档
+
+- 项目目标：`PROJECT_GOAL.md`
+- 技术路线：`TECHNICAL_ROADMAP.md`
+- 模型训练：`MODEL_TRAINING.md`
+- Ubuntu 环境：`UBUNTU_SETUP.md`

@@ -6,3 +6,5 @@ demo_runs/
 datasets/
 model_runs/
 model_count_output/
+count_demo_output/
+count_demo_output_strict/

@@ -22,10 +22,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from count_cylinder_parts_demo import sample_and_count
+from counting.yolo_counter import count_video_with_yolo
 
 
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+DEFAULT_WEIGHTS = BASE_DIR / "model_runs" / "end_cap_single_video" / "weights" / "best.pt"
 
 app = FastAPI(title="物资绕拍视频计数 Demo")
 app.add_middleware(
@@ -65,13 +66,13 @@ async def count_video(video: UploadFile = File(...)) -> dict[str, Any]:
             output_dir=str(output_dir),
             frame_stride=12,
             max_frames=0,
-            cluster_eps=0.0,
-            include_background_piles=False,
-            save_every_annotated_frame=False,
-            max_center_std=43.0,
-            min_ring_bamboo=0.17,
+            weights=os.environ.get("COUNTING_MODEL_WEIGHTS", str(DEFAULT_WEIGHTS)),
+            conf=float(os.environ.get("COUNTING_MODEL_CONF", "0.25")),
+            iou=float(os.environ.get("COUNTING_MODEL_IOU", "0.55")),
+            imgsz=int(os.environ.get("COUNTING_MODEL_IMGSZ", "640")),
+            device=os.environ.get("COUNTING_MODEL_DEVICE", ""),
         )
-        result = sample_and_count(args)
+        result = count_video_with_yolo(args)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"视频计数失败：{exc}") from exc
     finally:
@@ -97,7 +98,7 @@ def build_response(run_id: str, result: dict[str, Any], output_dir: Path) -> dic
         "config": result.get("config", {}),
         "per_frame": per_frame,
         "annotated_images": [to_run_url(path) for path in annotated_images[:12]],
-        "projection_plot": optional_run_url(output_dir / "projected_clusters.png"),
+        "projection_plot": None,
         "result_json": optional_run_url(output_dir / "count_result.json"),
     }
 
