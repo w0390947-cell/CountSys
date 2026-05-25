@@ -83,6 +83,25 @@ async def count_video(video: UploadFile = File(...)) -> dict[str, Any]:
 
 def build_response(run_id: str, result: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     per_frame = result.get("per_frame", [])
+    detections_by_frame: dict[int, list[dict[str, Any]]] = {}
+    for detection in result.get("detections", []):
+        frame_index = int(detection.get("frame_index", -1))
+        detections_by_frame.setdefault(frame_index, []).append(detection)
+
+    process_frames = []
+    for frame in per_frame:
+        frame_index = int(frame.get("frame_index", -1))
+        image_path = Path(frame.get("image_path", ""))
+        annotated_path = Path(frame.get("annotated_path", ""))
+        process_frames.append(
+            {
+                **frame,
+                "image_url": optional_run_url(image_path),
+                "annotated_url": optional_run_url(annotated_path),
+                "detections": detections_by_frame.get(frame_index, []),
+            }
+        )
+
     annotated_dir = output_dir / "annotated"
     annotated_images = sorted(annotated_dir.glob("*.jpg"))
 
@@ -97,6 +116,7 @@ def build_response(run_id: str, result: dict[str, Any], output_dir: Path) -> dic
         "video_info": result.get("video_info", {}),
         "config": result.get("config", {}),
         "per_frame": per_frame,
+        "process_frames": process_frames,
         "annotated_images": [to_run_url(path) for path in annotated_images[:12]],
         "projection_plot": None,
         "result_json": optional_run_url(output_dir / "count_result.json"),
@@ -106,7 +126,10 @@ def build_response(run_id: str, result: dict[str, Any], output_dir: Path) -> dic
 def optional_run_url(path: Path) -> str | None:
     if not path.exists():
         return None
-    return to_run_url(path)
+    try:
+        return to_run_url(path)
+    except ValueError:
+        return None
 
 
 def to_run_url(path: Path) -> str:

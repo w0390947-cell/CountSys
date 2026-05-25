@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--device", default="", help="Examples: cpu, 0, 0,1. Empty lets Ultralytics decide.")
-    parser.add_argument("--project", default="model_runs")
+    parser.add_argument("--project", default=str(PROJECT_ROOT / "model_runs"))
     parser.add_argument("--name", default="end_cap_single_video")
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--workers", type=int, default=2)
@@ -40,6 +40,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     data_path = Path(args.data)
+    if not data_path.is_absolute():
+        data_path = PROJECT_ROOT / data_path
     if not data_path.exists():
         raise FileNotFoundError(
             f"Dataset config not found: {data_path}. Run scripts/extract_frames_for_labeling.py first, then add labels."

@@ -349,6 +349,81 @@
         gap: 12px;
       }
 
+      .viewer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px;
+        gap: 14px;
+        align-items: start;
+      }
+
+      .viewer-stage {
+        min-height: 360px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0f1720;
+        overflow: hidden;
+      }
+
+      .viewer-stage img {
+        display: block;
+        max-width: 100%;
+        max-height: 68vh;
+        object-fit: contain;
+      }
+
+      .viewer-side {
+        display: grid;
+        gap: 10px;
+      }
+
+      .frame-meta {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        background: #ffffff;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .det-list {
+        max-height: 360px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .det-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+
+      .det-item:last-child {
+        border-bottom: 0;
+      }
+
+      .viewer-controls {
+        display: grid;
+        grid-template-columns: auto auto auto minmax(140px, 1fr);
+        gap: 8px;
+        align-items: center;
+        margin-top: 12px;
+      }
+
+      .viewer-controls button {
+        min-width: 42px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+      }
+
       .json-link {
         color: var(--accent-strong);
         font-size: 14px;
@@ -411,6 +486,18 @@
           grid-template-columns: 1fr;
         }
 
+        .viewer {
+          grid-template-columns: 1fr;
+        }
+
+        .viewer-controls {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .viewer-controls input[type="range"] {
+          grid-column: 1 / -1;
+        }
+
         .actions {
           flex-direction: column;
         }
@@ -452,7 +539,7 @@
               <button type="button" id="chooseButton">选择视频</button>
               <button type="button" class="primary" id="submitButton" disabled>开始计数</button>
             </div>
-            <p class="small-note">上传后页面会等待处理完成，结果会显示计数、视频信息、关键帧检测图和投影聚类诊断图。</p>
+            <p class="small-note">上传后页面会等待处理完成，结果会显示计数、视频信息、逐帧检测回放和关键帧检测图。</p>
             <div class="message" id="message"></div>
           </div>
         </section>
@@ -476,21 +563,21 @@
             </div>
 
             <div class="tabs" role="tablist">
-              <button type="button" class="tab active" data-tab="frames">每帧数量</button>
+              <button type="button" class="tab active" data-tab="process">检测回放</button>
+              <button type="button" class="tab" data-tab="frames">每帧数量</button>
               <button type="button" class="tab" data-tab="gallery">标注关键帧</button>
-              <button type="button" class="tab" data-tab="projection">聚类诊断</button>
             </div>
 
-            <div class="panel-body tab-panel active" id="tab-frames">
+            <div class="panel-body tab-panel active" id="tab-process">
+              <div id="processViewer"></div>
+            </div>
+
+            <div class="panel-body tab-panel" id="tab-frames">
               <div class="chart-wrap" id="frameChart"></div>
             </div>
 
             <div class="panel-body tab-panel" id="tab-gallery">
               <div class="gallery" id="gallery"></div>
-            </div>
-
-            <div class="panel-body tab-panel" id="tab-projection">
-              <div class="projection" id="projection"></div>
             </div>
           </div>
         </section>
@@ -507,12 +594,15 @@
       const emptyState = document.getElementById("emptyState");
       const resultView = document.getElementById("resultView");
       const summaryGrid = document.getElementById("summaryGrid");
+      const processViewer = document.getElementById("processViewer");
       const frameChart = document.getElementById("frameChart");
       const gallery = document.getElementById("gallery");
-      const projection = document.getElementById("projection");
       const jsonLink = document.getElementById("jsonLink");
 
       let currentFile = null;
+      let processFrames = [];
+      let currentFrameIndex = 0;
+      let playbackTimer = null;
 
       chooseButton.addEventListener("click", () => input.click());
       input.addEventListener("change", () => setFile(input.files[0]));
@@ -597,6 +687,7 @@
       }
 
       function renderResult(data) {
+        stopPlayback();
         emptyState.hidden = true;
         resultView.hidden = false;
         jsonLink.hidden = !data.result_json;
@@ -612,13 +703,13 @@
           metric("视频时长", info.duration_sec ? `${info.duration_sec.toFixed(1)} 秒` : "-", true),
           metric("分辨率", info.width && info.height ? `${info.width} × ${info.height}` : "-", true),
           metric("FPS", info.fps ? info.fps.toFixed(1) : "-", true),
-          metric("位姿成功", `${data.pose_ok_count ?? "-"} / ${data.sampled_frame_count ?? "-"}`, true),
-          metric("聚类诊断", data.global_projection_cluster_count_diagnostic ?? "-", true),
+          metric("模型阈值", data.config?.conf ?? "-", true),
+          metric("输入尺寸", data.config?.imgsz ?? "-", true),
         ].join("");
 
+        renderProcessViewer(data.process_frames || []);
         renderFrameChart(data.per_frame || []);
         renderGallery(data.annotated_images || []);
-        renderProjection(data.projection_plot);
       }
 
       function metric(label, value, small = false) {
@@ -656,10 +747,100 @@
           : '<p class="upload-hint">没有生成标注关键帧。</p>';
       }
 
-      function renderProjection(src) {
-        projection.innerHTML = src
-          ? `<img src="${src}" alt="投影聚类诊断图" loading="lazy" />`
-          : '<p class="upload-hint">没有生成投影聚类诊断图。</p>';
+      function renderProcessViewer(frames) {
+        processFrames = frames;
+        currentFrameIndex = 0;
+        stopPlayback();
+        if (!processFrames.length) {
+          processViewer.innerHTML = '<p class="upload-hint">没有逐帧检测结果。</p>';
+          return;
+        }
+
+        processViewer.innerHTML = `
+          <div class="viewer">
+            <div>
+              <div class="viewer-stage">
+                <img id="viewerImage" src="" alt="当前检测帧" />
+              </div>
+              <div class="viewer-controls">
+                <button type="button" id="prevFrameButton">上一帧</button>
+                <button type="button" id="playFrameButton">播放</button>
+                <button type="button" id="nextFrameButton">下一帧</button>
+                <input type="range" id="frameSlider" min="0" max="${processFrames.length - 1}" value="0" />
+              </div>
+            </div>
+            <aside class="viewer-side">
+              <div class="frame-meta" id="frameMeta"></div>
+              <div class="det-list" id="detectionList"></div>
+            </aside>
+          </div>
+        `;
+
+        document.getElementById("prevFrameButton").addEventListener("click", () => showProcessFrame(currentFrameIndex - 1));
+        document.getElementById("nextFrameButton").addEventListener("click", () => showProcessFrame(currentFrameIndex + 1));
+        document.getElementById("playFrameButton").addEventListener("click", togglePlayback);
+        document.getElementById("frameSlider").addEventListener("input", (event) => showProcessFrame(Number(event.target.value)));
+        showProcessFrame(0);
+      }
+
+      function showProcessFrame(index) {
+        if (!processFrames.length) return;
+        currentFrameIndex = Math.max(0, Math.min(processFrames.length - 1, index));
+        const frame = processFrames[currentFrameIndex];
+        const image = document.getElementById("viewerImage");
+        const slider = document.getElementById("frameSlider");
+        const meta = document.getElementById("frameMeta");
+        const list = document.getElementById("detectionList");
+        if (!image || !slider || !meta || !list) return;
+
+        image.src = frame.annotated_url || frame.image_url || "";
+        slider.value = String(currentFrameIndex);
+        meta.innerHTML = `
+          <strong>第 ${currentFrameIndex + 1} / ${processFrames.length} 帧</strong><br />
+          视频帧号：${escapeHtml(String(frame.frame_number ?? "-"))}<br />
+          时间：${typeof frame.timestamp_sec === "number" ? frame.timestamp_sec.toFixed(2) : "-"} 秒<br />
+          当前帧检测：${escapeHtml(String(frame.detection_count ?? 0))} 个
+        `;
+
+        const detections = frame.detections || [];
+        list.innerHTML = detections.length
+          ? detections
+              .map((item, itemIndex) => {
+                const score = typeof item.score === "number" ? item.score.toFixed(2) : "-";
+                return `
+                  <div class="det-item">
+                    <span>#${itemIndex + 1} ${escapeHtml(item.class_name || "part_end_cap")}</span>
+                    <span>${score}</span>
+                  </div>
+                `;
+              })
+              .join("")
+          : '<div class="det-item"><span>当前帧无检测框</span><span></span></div>';
+      }
+
+      function togglePlayback() {
+        if (playbackTimer) {
+          stopPlayback();
+          return;
+        }
+        const button = document.getElementById("playFrameButton");
+        if (button) button.textContent = "暂停";
+        playbackTimer = window.setInterval(() => {
+          if (currentFrameIndex >= processFrames.length - 1) {
+            showProcessFrame(0);
+          } else {
+            showProcessFrame(currentFrameIndex + 1);
+          }
+        }, 650);
+      }
+
+      function stopPlayback() {
+        if (playbackTimer) {
+          window.clearInterval(playbackTimer);
+          playbackTimer = null;
+        }
+        const button = document.getElementById("playFrameButton");
+        if (button) button.textContent = "播放";
       }
 
       function formatBytes(bytes) {
