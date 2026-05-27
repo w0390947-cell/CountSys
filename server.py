@@ -27,8 +27,11 @@ from counting.yolo_counter import count_video_with_yolo
 
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 DEFAULT_WEIGHTS = BASE_DIR / "model_runs" / "end_cap_single_video" / "weights" / "best.pt"
+FALLBACK_WEIGHTS = (
+    BASE_DIR / "runs" / "detect" / "model_runs" / "end_cap_single_video" / "weights" / "best.pt",
+)
 
-app = FastAPI(title="物资绕拍视频计数 Demo")
+app = FastAPI(title="物资点检系统")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,7 +69,7 @@ async def count_video(video: UploadFile = File(...)) -> dict[str, Any]:
             output_dir=str(output_dir),
             frame_stride=12,
             max_frames=0,
-            weights=os.environ.get("COUNTING_MODEL_WEIGHTS", str(DEFAULT_WEIGHTS)),
+            weights=os.environ.get("COUNTING_MODEL_WEIGHTS", str(resolve_default_weights())),
             conf=float(os.environ.get("COUNTING_MODEL_CONF", "0.25")),
             iou=float(os.environ.get("COUNTING_MODEL_IOU", "0.55")),
             imgsz=int(os.environ.get("COUNTING_MODEL_IMGSZ", "640")),
@@ -79,6 +82,15 @@ async def count_video(video: UploadFile = File(...)) -> dict[str, Any]:
         await video.close()
 
     return build_response(run_id, result, output_dir)
+
+
+def resolve_default_weights() -> Path:
+    if DEFAULT_WEIGHTS.exists():
+        return DEFAULT_WEIGHTS
+    for weights_path in FALLBACK_WEIGHTS:
+        if weights_path.exists():
+            return weights_path
+    return DEFAULT_WEIGHTS
 
 
 def build_response(run_id: str, result: dict[str, Any], output_dir: Path) -> dict[str, Any]:

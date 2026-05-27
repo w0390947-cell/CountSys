@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>物资视频计数 Demo</title>
+    <title>物资点检系统</title>
     <style>
       :root {
         color-scheme: light;
@@ -21,6 +21,10 @@
 
       * {
         box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
       }
 
       body {
@@ -52,17 +56,6 @@
         align-items: center;
         gap: 12px;
         min-width: 0;
-      }
-
-      .mark {
-        display: grid;
-        place-items: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        background: #e7f0f8;
-        color: var(--accent-strong);
-        font-weight: 800;
       }
 
       h1 {
@@ -424,16 +417,6 @@
         width: 100%;
       }
 
-      .json-link {
-        color: var(--accent-strong);
-        font-size: 14px;
-        text-decoration: none;
-      }
-
-      .json-link:hover {
-        text-decoration: underline;
-      }
-
       .empty {
         min-height: 420px;
         display: grid;
@@ -512,8 +495,7 @@
     <header>
       <div class="topbar">
         <div class="brand">
-          <div class="mark">C</div>
-          <h1>物资绕拍视频计数 Demo</h1>
+          <h1>物资点检系统</h1>
         </div>
         <div class="status"><span class="dot"></span><span>本地算法服务</span></div>
       </div>
@@ -529,8 +511,8 @@
             <label class="upload-box" id="dropZone" for="videoInput">
               <span>
                 <span class="upload-icon">↑</span>
-                <p class="upload-title">选择或拖入绕拍视频</p>
-                <p class="upload-hint">支持 mp4、mov、avi、mkv、webm。当前模型面向竹竿包裹圆柱零件。</p>
+                <p class="upload-title">选择或拖入视频</p>
+                <p class="upload-hint">选支持 mp4、mov、avi、mkv、webm。</p>
               </span>
             </label>
             <input id="videoInput" type="file" accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm" />
@@ -539,7 +521,6 @@
               <button type="button" id="chooseButton">选择视频</button>
               <button type="button" class="primary" id="submitButton" disabled>开始计数</button>
             </div>
-            <p class="small-note">上传后页面会等待处理完成，结果会显示计数、视频信息、逐帧检测回放和关键帧检测图。</p>
             <div class="message" id="message"></div>
           </div>
         </section>
@@ -547,7 +528,6 @@
         <section class="panel">
           <div class="panel-head">
             <h2 class="panel-title">计数结果</h2>
-            <a class="json-link" id="jsonLink" href="#" target="_blank" rel="noreferrer" hidden>查看 JSON</a>
           </div>
 
           <div id="emptyState" class="empty">
@@ -597,7 +577,6 @@
       const processViewer = document.getElementById("processViewer");
       const frameChart = document.getElementById("frameChart");
       const gallery = document.getElementById("gallery");
-      const jsonLink = document.getElementById("jsonLink");
 
       let currentFile = null;
       let processFrames = [];
@@ -690,10 +669,6 @@
         stopPlayback();
         emptyState.hidden = true;
         resultView.hidden = false;
-        jsonLink.hidden = !data.result_json;
-        if (data.result_json) {
-          jsonLink.href = data.result_json;
-        }
 
         const info = data.video_info || {};
         summaryGrid.innerHTML = [
